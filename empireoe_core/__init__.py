@@ -11,6 +11,8 @@ from empireoe_core.auth import (
     require_roles,
     create_service_token,
     verify_service_token,
+    create_delete_account_router,
+    delete_account_service,
 )
 
 # Config
@@ -56,6 +58,8 @@ __all__ = [
     "require_roles",
     "create_service_token",
     "verify_service_token",
+    "create_delete_account_router",
+    "delete_account_service",
     # Config
     "EmpireBaseSettings",
     # Database
