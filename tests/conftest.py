@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
 import pytest_asyncio
-from sqlalchemy import Integer, String, Text
+from sqlalchemy import Integer, String
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
