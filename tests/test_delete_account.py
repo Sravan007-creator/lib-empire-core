@@ -117,7 +117,7 @@ class TestDeleteAccountService:
 
     async def test_extra_scrub_fields(self, db):
         user = await _seed_user(db, bio="Hello world")
-        result = await delete_account_service(db, user_model=User, user_id=user.id, organization_id=1, scrub_fields={"bio": None})
+        await delete_account_service(db, user_model=User, user_id=user.id, organization_id=1, scrub_fields={"bio": None})
 
 
 class TestDeleteAccountRouter:
@@ -125,7 +125,7 @@ class TestDeleteAccountRouter:
     @pytest_asyncio.fixture
     async def app(self, engine):
         from fastapi import FastAPI, Request
-        from empireoe_core.db import set_session_factory, get_db
+        from empireoe_core.db import set_session_factory
         factory = create_session_factory(engine)
         set_session_factory(factory)
         _app = FastAPI()
