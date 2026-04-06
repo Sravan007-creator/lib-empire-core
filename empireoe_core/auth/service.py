@@ -23,7 +23,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import PyJWTError as JWTError
 
 ALGORITHM = "HS256"
 SERVICE_TOKEN_EXPIRE_MINUTES = 5  # Short-lived — services should request fresh tokens

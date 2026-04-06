@@ -13,7 +13,8 @@ import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import PyJWTError as JWTError
 
 ALGORITHM = "HS256"
 DEFAULT_EXPIRE_MINUTES = 60
