@@ -1,5 +1,5 @@
 """empireoe-core — shared backend library for Empire FastAPI backends."""
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # Auth
 from empireoe_core.auth import (
@@ -48,6 +48,20 @@ from empireoe_core.sentry import init_sentry
 # Middleware
 from empireoe_core.middleware import setup_cors, setup_request_logging
 
+# AI gateway
+from empireoe_core.ai import (
+    AIBadResponse,
+    AIError,
+    AIRateLimited,
+    AIServiceUnavailable,
+    AISettings,
+    ChatResult,
+    TokenUsage,
+    chat_completion,
+    chat_completion_with_usage,
+    redact_pii,
+)
+
 __all__ = [
     # Auth
     "create_access_token",
@@ -89,4 +103,15 @@ __all__ = [
     # Middleware
     "setup_cors",
     "setup_request_logging",
+    # AI gateway
+    "AIError",
+    "AIServiceUnavailable",
+    "AIRateLimited",
+    "AIBadResponse",
+    "AISettings",
+    "ChatResult",
+    "TokenUsage",
+    "chat_completion",
+    "chat_completion_with_usage",
+    "redact_pii",
 ]
