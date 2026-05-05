@@ -1,5 +1,5 @@
 """empireoe-core — shared backend library for Empire FastAPI backends."""
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 # Auth
 from empireoe_core.auth import (

@@ -12,11 +12,13 @@ Shared Python backend library for all Empire FastAPI backends.
 - **Tenant isolation** -- `scope_query()` helper + protected field stripping
 - **Config** -- Base pydantic-settings class with common fields
 - **AI gateway** -- Single `chat_completion()` for OpenAI / Groq / Anthropic with cost-tracking logs, optional PII redaction, and typed errors (`AIServiceUnavailable`, `AIRateLimited`, `AIBadResponse`)
+- **Stripe** -- Pinned SDK + API-version wrapper (`empireoe_core.stripe`): `get_client`, `get_connected_client`, `idempotency_key_for`, `verify_webhook_signature`, `StripeOperationError`. Single source of truth across all 7 product backends (ADR-019). Install via the `[stripe]` extra.
 
 ## Installation
 
 ```bash
-pip install -e .     # from local checkout
+pip install -e .              # from local checkout (core only)
+pip install -e ".[stripe]"    # adds the Stripe SDK at the pinned range
 ```
 
 ## Usage
@@ -45,3 +47,20 @@ text = await chat_completion(
 ```
 
 Provider is selected via `AI_PROVIDER` env (`openai` / `groq` / `anthropic`). The matching `*_API_KEY` must be set. Default model can be overridden via `AI_MODEL_DEFAULT` or per-call `model=`.
+
+### Stripe (ADR-019)
+
+```python
+from empireoe_core.stripe import (
+    get_client, get_connected_client, idempotency_key_for,
+    verify_webhook_signature, StripeOperationError,
+)
+
+# Backends pass their own pydantic Settings (must expose
+# STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET).
+client = get_client(settings)
+key = idempotency_key_for(operation="create_invoice", entity_type="engagement", entity_id=42)
+event = verify_webhook_signature(raw_payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
+```
+
+API version is pinned via `empireoe_core.stripe.STRIPE_API_VERSION`. Bump there, run all backends' tests, then ship.
