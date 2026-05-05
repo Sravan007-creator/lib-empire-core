@@ -90,7 +90,7 @@ def test_idempotency_key_string_entity_id():
 
 def test_verify_signature_valid():
     secret = "whsec_test_secret_value"
-    payload = json.dumps({"id": "evt_x", "type": "ping"}).encode()
+    payload = json.dumps({"id": "evt_x", "object": "event", "type": "ping"}).encode()
     ts = int(time.time())
     header = _stripe_signed_header(payload, secret, ts)
 
@@ -101,7 +101,7 @@ def test_verify_signature_valid():
 
 def test_verify_signature_invalid_secret_rejected():
     secret = "whsec_real"
-    payload = json.dumps({"id": "evt_x", "type": "ping"}).encode()
+    payload = json.dumps({"id": "evt_x", "object": "event", "type": "ping"}).encode()
     ts = int(time.time())
     header = _stripe_signed_header(payload, "whsec_wrong", ts)
 
@@ -113,7 +113,7 @@ def test_verify_signature_invalid_secret_rejected():
 
 def test_verify_signature_replay_too_old_rejected():
     secret = "whsec_test"
-    payload = json.dumps({"id": "evt_x", "type": "ping"}).encode()
+    payload = json.dumps({"id": "evt_x", "object": "event", "type": "ping"}).encode()
     ts = int(time.time()) - 600  # 10 minutes ago
     header = _stripe_signed_header(payload, secret, ts)
 
@@ -133,7 +133,7 @@ def test_verify_signature_no_secret_rejected():
 def test_verify_signature_invalid_payload_rejected():
     secret = "whsec_test"
     # Not valid JSON — should map to invalid_payload, not invalid_signature.
-    payload = b"this is not json"
+    payload = b"this is not valid json {"
     ts = int(time.time())
     header = _stripe_signed_header(payload, secret, ts)
 

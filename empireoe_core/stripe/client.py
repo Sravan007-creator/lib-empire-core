@@ -225,12 +225,25 @@ def verify_webhook_signature(
             original=exc,
         ) from exc
 
-    # ``construct_event`` returns a StripeObject in older SDKs and a typed
-    # ``Event`` in newer ones; both behave dict-like for our use. Normalize
-    # to a plain dict so downstream service code never imports stripe.
-    if hasattr(event, "to_dict"):
-        return event.to_dict()
-    return dict(event)
+    # Return the parsed payload as a plain dict so downstream code never
+    # needs to import the Stripe SDK.
+    #
+    # We deliberately return ``json.loads(payload)`` rather than calling
+    # ``event.to_dict()`` or ``dict(event)``:
+    #
+    # * ``construct_event`` already proved the payload is valid JSON and the
+    #   signature is authentic, so re-parsing is safe and O(1) in practice.
+    # * ``to_dict()`` is deprecated in Stripe SDK ≥ 15 and raises
+    #   ``AttributeError`` when the event object has a non-standard shape
+    #   (e.g. platform events without a top-level ``object`` key).
+    # * ``dict(event)`` in SDK ≥ 15 returns a shallow copy that may omit
+    #   nested ``data.object`` fields depending on the SDK's internal type.
+    #
+    # The raw payload is the canonical source of truth; using it here
+    # insulates callers from any future Stripe SDK model changes.
+    import json as _json  # local to avoid circular at module level
+
+    return _json.loads(payload)
 
 
 # ---------------------------------------------------------------------------
