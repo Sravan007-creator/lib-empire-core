@@ -204,7 +204,7 @@ def verify_webhook_signature(
             stripe_code="invalid_signature",
         )
     try:
-        event = stripe.Webhook.construct_event(
+        stripe.Webhook.construct_event(
             payload,
             signature_header,
             secret,
