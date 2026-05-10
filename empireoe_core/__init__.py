@@ -48,6 +48,9 @@ from empireoe_core.sentry import init_sentry
 # Middleware
 from empireoe_core.middleware import setup_cors, setup_request_logging
 
+# Lead routing
+from empireoe_core.lead_router import Assignee, route_lead, should_notify
+
 # AI gateway
 from empireoe_core.ai import (
     AIBadResponse,
@@ -114,4 +117,8 @@ __all__ = [
     "chat_completion",
     "chat_completion_with_usage",
     "redact_pii",
+    # Lead routing
+    "Assignee",
+    "route_lead",
+    "should_notify",
 ]
