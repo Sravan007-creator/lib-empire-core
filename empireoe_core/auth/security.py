@@ -60,6 +60,45 @@ def verify_password(password: str, stored_hash: str) -> bool:
         return False
 
 
+def create_mfa_challenge_token(
+    user_id: int | str,
+    secret_key: str,
+    expires_seconds: int = 300,
+) -> str:
+    """Issue a short-lived JWT proving successful password auth but not full access.
+
+    Used in the login → MFA challenge flow: when login returns
+    ``mfa_required=true``, the client exchanges this token (plus a TOTP / backup
+    code) at the API's ``/auth/mfa/verify`` endpoint to receive real
+    access + refresh tokens.
+
+    The token carries ``type="mfa_challenge"`` so callers can reject regular
+    access tokens at the verify endpoint and vice versa.
+    """
+    expire = datetime.now(UTC) + timedelta(seconds=expires_seconds)
+    payload = {"sub": str(user_id), "exp": expire, "type": "mfa_challenge"}
+    return jwt.encode(payload, secret_key, algorithm=ALGORITHM)
+
+
+def decode_mfa_challenge(token: str, secret_key: str) -> dict[str, Any] | None:
+    """Decode and validate an MFA challenge token.
+
+    Returns the payload if the token is signed, unexpired, and carries
+    ``type="mfa_challenge"``. Returns ``None`` on any failure — callers map
+    that to a 401 with a generic "invalid or expired MFA challenge" message
+    rather than leaking which check failed.
+    """
+    try:
+        payload = jwt.decode(token, secret_key, algorithms=[ALGORITHM])
+    except JWTError:
+        return None
+    if payload.get("type") != "mfa_challenge":
+        return None
+    if "sub" not in payload or "exp" not in payload:
+        return None
+    return payload
+
+
 def validate_password_complexity(password: str) -> str | None:
     if len(password) < 8:
         return "Password must be at least 8 characters"
