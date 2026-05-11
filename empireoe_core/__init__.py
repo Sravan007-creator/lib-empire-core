@@ -1,5 +1,5 @@
 """empireoe-core — shared backend library for Empire FastAPI backends."""
-__version__ = "0.3.0"
+__version__ = "0.5.0"
 
 # Auth
 from empireoe_core.auth import (
@@ -48,8 +48,18 @@ from empireoe_core.sentry import init_sentry
 # Middleware
 from empireoe_core.middleware import setup_cors, setup_request_logging
 
-# Lead routing
-from empireoe_core.lead_router import Assignee, route_lead, should_notify
+# Lead routing + Meta webhook factory
+from empireoe_core.lead_router import (
+    Assignee,
+    MetaWebhookConfig,
+    classify_inbound_lead,
+    create_meta_webhook_router,
+    route_lead,
+    send_ig_message,
+    send_wa_message,
+    should_notify,
+    verify_meta_signature,
+)
 
 # AI gateway
 from empireoe_core.ai import (
@@ -117,8 +127,14 @@ __all__ = [
     "chat_completion",
     "chat_completion_with_usage",
     "redact_pii",
-    # Lead routing
+    # Lead routing + Meta webhook factory
     "Assignee",
+    "MetaWebhookConfig",
+    "classify_inbound_lead",
+    "create_meta_webhook_router",
     "route_lead",
+    "send_ig_message",
+    "send_wa_message",
     "should_notify",
+    "verify_meta_signature",
 ]
