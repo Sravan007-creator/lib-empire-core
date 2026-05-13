@@ -100,6 +100,14 @@ def should_notify(category: str) -> bool:
     return category in {"recruitment", "study_abroad", "agent"}
 
 
+# Re-export the Slack notification primitives so callers only need to
+# import from `lead_router`. See `slack_notify.py` for the full docs.
+from empireoe_core.slack_notify import (  # noqa: E402, F401 — public re-export
+    SlackLeadMessage,
+    notify_lead_arrived,
+)
+
+
 # ── Meta webhook config ────────────────────────────────────────────────────────
 
 @dataclass
@@ -116,6 +124,10 @@ class MetaWebhookConfig:
     wa_phone_id: str = ""
     wa_verify_token: str = ""
     anthropic_key: str = ""
+    # Optional product slug (e.g. "lwe", "empireo", "hotelo"). When set,
+    # the Slack notify hook will consult SLACK_WEBHOOK_URL_LEADS_<PRODUCT>
+    # before falling back to the category-based default.
+    product_slug: str = ""
     # Which category of leads to persist (others get reply only, no DB write)
     persist_categories: frozenset[str] = field(
         default_factory=lambda: frozenset({"recruitment", "study_abroad", "agent"})
@@ -131,6 +143,7 @@ class MetaWebhookConfig:
             wa_phone_id=os.getenv("WHATSAPP_PHONE_NUMBER_ID", ""),
             wa_verify_token=os.getenv("WHATSAPP_VERIFY_TOKEN", ""),
             anthropic_key=os.getenv("ANTHROPIC_API_KEY", ""),
+            product_slug=os.getenv("LEAD_ROUTER_PRODUCT_SLUG", ""),
         )
 
 
@@ -425,6 +438,26 @@ def create_meta_webhook_router(
                     if on_lead:
                         await on_lead("Instagram DM", sender_id, username, text)
 
+                    # Phase 1: ping the recruitment Slack channel for every IG
+                    # lead — IG persona is recruitment-only per the system
+                    # prompt. Silently no-ops when no webhook is set.
+                    assignee = route_lead("recruitment")
+                    await notify_lead_arrived(
+                        category="recruitment",
+                        product=config.product_slug or None,
+                        message=SlackLeadMessage(
+                            title="New Instagram DM — Recruitment",
+                            summary=(
+                                f"*{username or 'IG user ' + sender_id}* wrote:\n"
+                                f"> {text[:300]}"
+                            ),
+                            extra_fields={
+                                "Assignee": assignee.name,
+                                "Source": "Instagram DM",
+                            },
+                        ),
+                    )
+
         background_tasks.add_task(_process)
         return {"status": "ok"}
 
@@ -480,6 +513,28 @@ def create_meta_webhook_router(
 
                         if on_lead and result["category"] in config.persist_categories:
                             await on_lead("WhatsApp DM", phone, sender_name, text)
+
+                        # Phase 1: notify the assignee's Slack channel. Always
+                        # called for qualifying categories; silently no-ops
+                        # when no webhook is configured (see slack_notify).
+                        if should_notify(result["category"]):
+                            assignee = route_lead(result["category"])
+                            await notify_lead_arrived(
+                                category=result["category"],
+                                product=config.product_slug or None,
+                                message=SlackLeadMessage(
+                                    title=f"New WhatsApp lead — {result['category'].replace('_', ' ').title()}",
+                                    summary=(
+                                        f"*{sender_name or 'Unknown'}* ({phone}) wrote:\n"
+                                        f"> {text[:300]}"
+                                    ),
+                                    extra_fields={
+                                        "Assignee": assignee.name,
+                                        "Category": result["category"],
+                                        "Source": "WhatsApp DM",
+                                    },
+                                ),
+                            )
 
         background_tasks.add_task(_process)
         return {"status": "ok"}
