@@ -338,6 +338,55 @@ async def send_wa_message(to: str, text: str, wa_token: str, wa_phone_id: str) -
         pass
 
 
+async def send_wa_template(
+    to: str,
+    template_name: str,
+    language_code: str,
+    wa_token: str,
+    wa_phone_id: str,
+    components: list[dict] | None = None,
+) -> bool:
+    """Send a WhatsApp approved template message via the Cloud API.
+
+    Returns True on success, False on failure (HTTP error or missing credentials).
+
+    Args:
+        to:            Recipient phone number in E.164 format (e.g. "+919876543210").
+        template_name: Name of the approved template (e.g. "hello_world").
+        language_code: BCP-47 language code (e.g. "en_US", "en", "ar").
+        wa_token:      WhatsApp Cloud API access token.
+        wa_phone_id:   WhatsApp Cloud API phone number ID.
+        components:    Optional list of template component overrides (body params,
+                       header media, buttons, etc.) per Cloud API spec.
+    """
+    if not wa_token or not wa_phone_id:
+        return False
+    template: dict = {
+        "name": template_name,
+        "language": {"code": language_code},
+    }
+    if components:
+        template["components"] = components
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.post(
+                f"https://graph.facebook.com/v21.0/{wa_phone_id}/messages",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {wa_token}",
+                },
+                json={
+                    "messaging_product": "whatsapp",
+                    "to": to,
+                    "type": "template",
+                    "template": template,
+                },
+            )
+        return res.is_success
+    except Exception:
+        return False
+
+
 async def _get_ig_username(user_id: str, page_token: str) -> str | None:
     if not page_token:
         return None
@@ -493,9 +542,25 @@ def create_meta_webhook_router(
                     messages = value.get("messages") or []
                     contacts = value.get("contacts") or []
                     for msg in messages:
-                        if msg.get("type") != "text":
+                        msg_type = msg.get("type")
+                        # Extract the user-readable text for each supported type.
+                        # interactive: user tapped a quick-reply/list button on a template.
+                        # button: user tapped a reply-button on a legacy template.
+                        if msg_type == "text":
+                            text = (msg.get("text") or {}).get("body", "").strip()
+                        elif msg_type == "interactive":
+                            interactive = msg.get("interactive") or {}
+                            itype = interactive.get("type")
+                            if itype == "button_reply":
+                                text = (interactive.get("button_reply") or {}).get("title", "").strip()
+                            elif itype == "list_reply":
+                                text = (interactive.get("list_reply") or {}).get("title", "").strip()
+                            else:
+                                continue
+                        elif msg_type == "button":
+                            text = (msg.get("button") or {}).get("text", "").strip()
+                        else:
                             continue
-                        text = (msg.get("text") or {}).get("body", "").strip()
                         phone = msg.get("from")
                         if not text or not phone:
                             continue
