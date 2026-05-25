@@ -90,19 +90,24 @@ def _resolve_webhook(*, category: str, product: str | None = None) -> str:
     """Pick the Slack webhook URL for this lead.
 
     Order of precedence:
-      1. SLACK_WEBHOOK_URL_LEADS_<PRODUCT>
-      2. SLACK_WEBHOOK_URL_LEADS_RECRUITMENT  (if category == recruitment)
-      3. SLACK_WEBHOOK_URL_LEADS_DEFAULT
+      1. SLACK_WEBHOOK_URL_LEADS_<PRODUCT>  (e.g. SLACK_WEBHOOK_URL_LEADS_LWE)
+      2. SLACK_WEBHOOK_URL_LEADS_<CATEGORY> (e.g. SLACK_WEBHOOK_URL_LEADS_RECRUITMENT)
+      3. SLACK_WEBHOOK_URL_LEADS_DEFAULT    (final fallback / catch-all)
     Empty string = "no webhook configured" — fire-and-forget no-op.
+
+    Note: ``SLACK_WEBHOOK_URL_LEADS_GENERAL`` is accepted as a synonym for
+    ``SLACK_WEBHOOK_URL_LEADS_DEFAULT`` so both env var names route
+    ``general`` leads to #leads-general without an ops rename.
     """
     if product:
         url = os.getenv(f"SLACK_WEBHOOK_URL_LEADS_{product.upper()}", "")
         if url:
             return url
-    if category == "recruitment":
-        url = os.getenv("SLACK_WEBHOOK_URL_LEADS_RECRUITMENT", "")
-        if url:
-            return url
+    # Category-specific lookup (covers recruitment, study_abroad, agent, general, etc.)
+    url = os.getenv(f"SLACK_WEBHOOK_URL_LEADS_{category.upper()}", "")
+    if url:
+        return url
+    # Legacy / catch-all fallback
     return os.getenv("SLACK_WEBHOOK_URL_LEADS_DEFAULT", "")
 
 

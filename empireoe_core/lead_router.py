@@ -96,8 +96,12 @@ def route_lead(category: str, product: str | None = None) -> Assignee:
 
 
 def should_notify(category: str) -> bool:
-    """Return True for categories that warrant an immediate WhatsApp ping."""
-    return category in {"recruitment", "study_abroad", "agent"}
+    """Return True for categories that warrant an immediate Slack ping.
+
+    All valid categories notify — general leads go to #leads-general (Shybin)
+    the same way recruitment leads go to #leads-recruitment (Sravan).
+    """
+    return category in VALID_CATEGORIES
 
 
 # Re-export the Slack notification primitives so callers only need to
