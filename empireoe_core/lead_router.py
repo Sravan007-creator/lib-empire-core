@@ -54,6 +54,21 @@ from fastapi import APIRouter, BackgroundTasks, Request, Response
 
 logger = logging.getLogger(__name__)
 
+# ── Expected field subscriptions ──────────────────────────────────────────────
+
+#: All four WhatsApp webhook fields BOS requires.  These must ALL be subscribed
+#: in Meta App Dashboard → WhatsApp → Configuration → Webhook → Edit.
+#: Missing any field = silent data loss (no error, events just never arrive).
+#: Sharon manages subscriptions via Meta Business Manager.
+EXPECTED_WA_WEBHOOK_FIELDS: frozenset[str] = frozenset(
+    {
+        "messages",                        # inbound user messages
+        "message_status",                  # sent / delivered / read receipts
+        "message_template_status_update",  # template approved / rejected / paused
+        "account_alerts",                  # rate-limit warnings, account suspension
+    }
+)
+
 # ── Lead assignment ────────────────────────────────────────────────────────────
 
 RECRUITMENT_CATEGORIES = frozenset({"recruitment"})
@@ -538,7 +553,68 @@ def create_meta_webhook_router(
         async def _process() -> None:
             for entry in payload.get("entry", []):
                 for change in entry.get("changes", []):
+                    field_name = change.get("field", "")
                     value = change.get("value") or {}
+
+                    # ── message_template_status_update ───────────────────────
+                    # Fired when Meta approves, rejects, or pauses a template.
+                    # field == "message_template_status_update"
+                    if field_name == "message_template_status_update":
+                        event = value.get("event", "").upper()
+                        template_name = value.get("message_template_name", "unknown")
+                        template_id = value.get("message_template_id", "")
+                        reason = value.get("reason", "")
+                        logger.info(
+                            "wa_template_status field=%s template=%s id=%s event=%s reason=%s",
+                            field_name, template_name, template_id, event, reason,
+                        )
+                        if event in ("REJECTED", "PAUSED", "DISABLED"):
+                            logger.warning(
+                                "WA template '%s' (id=%s) is %s — reason: %s. "
+                                "Campaign sends using this template will fail until it is re-approved.",
+                                template_name, template_id, event, reason or "none given",
+                            )
+                        continue
+
+                    # ── account_alerts ───────────────────────────────────────
+                    # Fired for rate-limit warnings, account suspension, etc.
+                    # field == "account_alerts"
+                    if field_name == "account_alerts":
+                        alert_severity = value.get("severity", "unknown")
+                        alert_type = value.get("error_code", value.get("type", "unknown"))
+                        alert_msg = value.get("message", "")
+                        logger.warning(
+                            "wa_account_alert severity=%s type=%s message=%s",
+                            alert_severity, alert_type, alert_msg,
+                        )
+                        continue
+
+                    # ── message_status (delivery/read receipts) ──────────────
+                    # Fired for sent / delivered / read / failed status updates.
+                    # field == "messages" but payload contains "statuses" array.
+                    statuses = value.get("statuses") or []
+                    for status_event in statuses:
+                        msg_id = status_event.get("id", "")
+                        status = status_event.get("status", "")
+                        recipient = status_event.get("recipient_id", "")
+                        timestamp = status_event.get("timestamp", "")
+                        logger.info(
+                            "wa_message_status msg_id=%s status=%s recipient=%s ts=%s",
+                            msg_id, status, recipient, timestamp,
+                        )
+                        # Log errors explicitly so failed sends surface in monitoring.
+                        if status == "failed":
+                            errors = status_event.get("errors") or []
+                            for err in errors:
+                                logger.error(
+                                    "wa_send_failed msg_id=%s code=%s title=%s details=%s",
+                                    msg_id,
+                                    err.get("code"),
+                                    err.get("title"),
+                                    err.get("error_data", {}).get("details", ""),
+                                )
+
+                    # ── messages (inbound user messages) ─────────────────────
                     messages = value.get("messages") or []
                     contacts = value.get("contacts") or []
                     for msg in messages:
