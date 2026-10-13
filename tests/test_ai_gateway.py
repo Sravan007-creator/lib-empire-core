@@ -172,6 +172,69 @@ async def test_chat_completion_redacts_pii_before_send(monkeypatch):
     assert "[REDACTED_EMAIL]" in sent
 
 
+@pytest.mark.asyncio
+async def test_chat_completion_redacts_pii_in_block_content(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    captured: dict[str, Any] = {}
+
+    async def fake_post(self, url, **kwargs):
+        captured["body"] = kwargs.get("json")
+        return _openai_response("ok")
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    content = [
+        {"type": "text", "text": "my email a.b@example.com phone +91 9876543210"},
+        {"type": "text", "text": "PAN ABCDE1234F"},
+    ]
+    await chat_completion([{"role": "user", "content": content}], redact_pii=True)
+    sent = captured["body"]["messages"][0]["content"]
+    assert isinstance(sent, list) and len(sent) == 2
+    assert "a.b@example.com" not in sent[0]["text"]
+    assert "9876543210" not in sent[0]["text"]
+    assert "[REDACTED_EMAIL]" in sent[0]["text"]
+    assert "ABCDE1234F" not in sent[1]["text"]
+    # Caller's original blocks are not mutated.
+    assert content[0]["text"].startswith("my email a.b@example.com")
+
+
+@pytest.mark.asyncio
+async def test_chat_completion_redact_pii_rejects_unredactable_block(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    called = False
+
+    async def fake_post(self, url, **kwargs):
+        nonlocal called
+        called = True
+        return _openai_response("ok")
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    content = [
+        {"type": "text", "text": "hello"},
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}},
+    ]
+    with pytest.raises(ValueError, match="image_url"):
+        await chat_completion([{"role": "user", "content": content}], redact_pii=True)
+    assert called is False
+
+
+@pytest.mark.asyncio
+async def test_chat_completion_block_content_untouched_without_redact(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    captured: dict[str, Any] = {}
+
+    async def fake_post(self, url, **kwargs):
+        captured["body"] = kwargs.get("json")
+        return _openai_response("ok")
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+
+    content = [{"type": "text", "text": "a.b@example.com"}]
+    await chat_completion([{"role": "user", "content": content}])
+    assert captured["body"]["messages"][0]["content"] == content
+
+
 # ---------------------------------------------------------------------------
 # chat_completion — Anthropic shape
 # ---------------------------------------------------------------------------

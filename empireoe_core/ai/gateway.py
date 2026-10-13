@@ -186,6 +186,37 @@ async def chat_completion(
     return result.content
 
 
+def _redact_content(content: Any) -> Any:
+    """Redact PII from a message ``content`` value (string or block list).
+
+    Block-format content (``[{"type": "text", "text": ...}, ...]``) has every
+    ``text`` block redacted. Any block that is not plain text (image, document,
+    tool result, ...) cannot be redacted, so we raise rather than let it leave
+    the cluster unredacted while the caller believes ``redact_pii=True`` held.
+    """
+    if isinstance(content, str):
+        return _redact_pii(content)
+    if isinstance(content, list):
+        redacted: list[Any] = []
+        for block in content:
+            if isinstance(block, str):
+                redacted.append(_redact_pii(block))
+            elif (
+                isinstance(block, dict)
+                and block.get("type") == "text"
+                and isinstance(block.get("text"), str)
+            ):
+                redacted.append({**block, "text": _redact_pii(block["text"])})
+            else:
+                kind = block.get("type") if isinstance(block, dict) else type(block).__name__
+                raise ValueError(
+                    f"redact_pii=True cannot redact content block of type {kind!r}; "
+                    "remove it or send with redact_pii=False"
+                )
+        return redacted
+    return content
+
+
 async def chat_completion_with_usage(
     messages: list[dict[str, Any]],
     *,
@@ -212,8 +243,8 @@ async def chat_completion_with_usage(
         )
     for m in messages:
         content = m.get("content", "")
-        if redact_pii and isinstance(content, str):
-            content = _redact_pii(content)
+        if redact_pii:
+            content = _redact_content(content)
         payload_messages.append({"role": m.get("role", "user"), "content": content})
 
     if cfg.shape == "openai":
